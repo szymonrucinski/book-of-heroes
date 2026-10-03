@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Book of Heroes</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.css">
+  <style>
+    html, body { margin: 0; height: 100%; background: #000; }
+    #term { height: 100%; padding: 12px; box-sizing: border-box; }
+  </style>
+</head>
+<body>
+  <div id="term"></div>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.js"></script>
+  <script src="book-of-heroes.js"></script>
+  <script>
+    const term = new Terminal({ convertEol: true, cursorBlink: true });
+    const fit = new FitAddon.FitAddon();
+    term.loadAddon(fit);
+    term.open(document.getElementById('term'));
+    fit.fit();
+    addEventListener('resize', () => fit.fit());
+    term.focus();
+
+    // Line editing like a real console: echo, backspace, Enter sends the line.
+    const lines = [];
+    let line = '', waiting = null;
+    term.onData((data) => {
+      if (data.startsWith('\x1b')) return; // arrow keys etc.
+      for (const ch of data) {
+        if (ch === '\r') { term.write('\r\n'); lines.push(line + '\n'); line = ''; }
+        else if (ch === '\x7f') { if (line) { line = line.slice(0, -1); term.write('\b \b'); } }
+        else if (ch >= ' ') { line += ch; term.write(ch); }
+      }
+      if (waiting && lines.length) { waiting(lines.shift()); waiting = null; }
+    });
+
+    const out = (c) => c !== null && term.write(new Uint8Array([c]));
+    BookOfHeroes({
+      stdout: out,
+      stderr: out,
+      readLine: () => lines.length ? Promise.resolve(lines.shift()) : new Promise((r) => waiting = r),
+      onExit: () => term.write('\r\n[program exited, reload the page to start again]\r\n'),
+    });
+  </script>
+</body>
+</html>
